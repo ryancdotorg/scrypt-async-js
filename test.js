@@ -58,7 +58,7 @@ function testScrypt(i) {
       // Finished.
       console.log('Finished in ' + ((new Date()) - startTime) +  ' ms');
     }
-  }, 'hex');
+  }, 0, 'hex');
 }
 
 console.log('Running tests...');

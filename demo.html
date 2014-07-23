@@ -3,6 +3,11 @@
 <body>
 <script src="scrypt-async.js"></script>
 <script>
+function progress(x) {
+  var percent = Math.floor(x*100);
+  console.log(percent);
+  document.querySelector('#progress').innerHTML = percent.toString() + '%';
+}
 function testMe() {
   var t1=(new Date()).getTime();
   //console.log('hashing...');
@@ -16,11 +21,12 @@ function testMe() {
     document.querySelector('#out').innerHTML = 'scrypt: <b>'+t2+' ms</b> ' + res;
     document.querySelector("#btn").disabled = false;
     document.querySelector("#btn").innerHTML = 'Calculate';
-  }, "base64");
+  }, progress, "base64");
 }
 </script>
 interruptStep: <input id="forstep" type="text" value="200"><br>
 logN: <input id="logn" type="text" value="11"><br>
 r: <input id="r" type="text" value="8"><br>
 <button id="btn" onclick="testMe()">Calculate</button>
-<div id=out></div>
+<div id="progress">&nbsp;</div>
+<div id="out">&nbsp;</div>
