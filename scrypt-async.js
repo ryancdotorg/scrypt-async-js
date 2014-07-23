@@ -24,11 +24,7 @@
  * @param {function(number)} progress Progress function
  * @param {string?} encoding Result encoding ("base64", "hex", or null).
  */
-function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
-  'use strict';
-
-  progress = typeof progress === 'function' ? progress : function(x){};
-  progress(0.0);
+var scrypt = (function() {
 
   function SHA256(m) {
     /** @const */ var K = [
@@ -283,21 +279,21 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progres
   }
 
   function stringToUTF8Bytes(s) {
-      var arr = [];
-      for (var i = 0; i < s.length; i++) {
-          var c = s.charCodeAt(i);
-          if (c < 128) {
-              arr.push(c);
-          } else if (c > 127 && c < 2048) {
-              arr.push((c>>6) | 192);
-              arr.push((c & 63) | 128);
-          } else {
-              arr.push((c>>12) | 224);
-              arr.push(((c>>6) & 63) | 128);
-              arr.push((c & 63) | 128);
-          }
-      }
-      return arr;
+    var arr = [];
+    for (var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+            arr.push(c);
+        } else if (c > 127 && c < 2048) {
+            arr.push((c>>6) | 192);
+            arr.push((c & 63) | 128);
+        } else {
+            arr.push((c>>12) | 224);
+            arr.push(((c>>6) & 63) | 128);
+            arr.push((c & 63) | 128);
+        }
+    }
+    return arr;
   }
 
   function bytesToHex(p) {
@@ -342,115 +338,124 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progres
     return arr.join('');
   }
 
+  var __scrypt = function(password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
+    'use strict';
 
-  // Generate key.
+    progress = typeof progress === 'function' ? progress : function(x){};
+    progress(0.0);
 
-  // Set parallelization parameter to 1.
-  var p = 1;
+    // Generate key.
 
-  if (logN < 1 || logN > 31)
-    throw new Error('scrypt: logN not be between 1 and 31');
+    // Set parallelization parameter to 1.
+    var p = 1;
 
-  var MAX_INT = (1<<31)>>>0,
-      N = (1<<logN)>>>0,
-      XY, V, B, tmp;
+    if (logN < 1 || logN > 31)
+      throw new Error('scrypt: logN not be between 1 and 31');
 
-  if (r*p >= 1<<30 || r > MAX_INT/128/p || r > MAX_INT/256 || N > MAX_INT/128/r)
-    throw new Error('scrypt: parameters are too large');
+    var MAX_INT = (1<<31)>>>0,
+        N = (1<<logN)>>>0,
+        XY, V, B, tmp;
 
-  // Decode strings.
-  if (typeof password == 'string')
-    password = stringToUTF8Bytes(password);
-  if (typeof salt == 'string')
-    salt = stringToUTF8Bytes(salt);
+    if (r*p >= 1<<30 || r > MAX_INT/128/p || r > MAX_INT/256 || N > MAX_INT/128/r)
+      throw new Error('scrypt: parameters are too large');
 
-  if (typeof Int32Array !== 'undefined') {
-    //XXX We can use Uint32Array, but Int32Array is faster in Safari.
-    XY = new Int32Array(64*r);
-    V = new Int32Array(32*N*r);
-    tmp = new Int32Array(16);
-  } else {
-    XY = [];
-    V = [];
-    tmp = new Array(16);
-  }
-  B = PBKDF2_HMAC_SHA256_OneIter(password, salt, p*128*r);
+    // Decode strings.
+    if (typeof password == 'string')
+      password = stringToUTF8Bytes(password);
+    if (typeof salt == 'string')
+      salt = stringToUTF8Bytes(salt);
 
-  var xi = 0, yi = 32 * r;
-
-  function smixStart() {
-    for (var i = 0; i < 32*r; i++) {
-      var j = i*4;
-      XY[xi+i] = ((B[j+3] & 0xff)<<24) | ((B[j+2] & 0xff)<<16) |
-                 ((B[j+1] & 0xff)<<8)  | ((B[j+0] & 0xff)<<0);
+    if (typeof Int32Array !== 'undefined') {
+      //XXX We can use Uint32Array, but Int32Array is faster in Safari.
+      XY = new Int32Array(64*r);
+      V = new Int32Array(32*N*r);
+      tmp = new Int32Array(16);
+    } else {
+      XY = [];
+      V = [];
+      tmp = new Array(16);
     }
-  }
+    B = PBKDF2_HMAC_SHA256_OneIter(password, salt, p*128*r);
 
-  function smixStep1(start, end) {
-    for (var i = start; i < end; i += 2) {
-      blockCopy(V, i*(32*r), XY, xi, 32*r);
-      blockMix(tmp, XY, xi, yi, r);
+    var xi = 0, yi = 32 * r;
 
-      blockCopy(V, (i+1)*(32*r), XY, yi, 32*r);
-      blockMix(tmp, XY, yi, xi, r);
+    function smixStart() {
+      for (var i = 0; i < 32*r; i++) {
+        var j = i*4;
+        XY[xi+i] = ((B[j+3] & 0xff)<<24) | ((B[j+2] & 0xff)<<16) |
+                   ((B[j+1] & 0xff)<<8)  | ((B[j+0] & 0xff)<<0);
+      }
     }
-  }
 
-  function smixStep2(start, end) {
-    for (var i = start; i < end; i += 2) {
-      var j = integerify(XY, xi, r) & (N-1);
-      blockXOR(XY, xi, V, j*(32*r), 32*r);
-      blockMix(tmp, XY, xi, yi, r);
+    function smixStep1(start, end) {
+      for (var i = start; i < end; i += 2) {
+        blockCopy(V, i*(32*r), XY, xi, 32*r);
+        blockMix(tmp, XY, xi, yi, r);
 
-      j = integerify(XY, yi, r) & (N-1);
-      blockXOR(XY, yi, V, j*(32*r), 32*r);
-      blockMix(tmp, XY, yi, xi, r);
+        blockCopy(V, (i+1)*(32*r), XY, yi, 32*r);
+        blockMix(tmp, XY, yi, xi, r);
+      }
     }
-  }
 
-  function smixFinish() {
-    for (var i = 0; i < 32*r; i++) {
-      var j = XY[xi+i];
-      B[i*4+0] = (j>>>0)  & 0xff;
-      B[i*4+1] = (j>>>8)  & 0xff;
-      B[i*4+2] = (j>>>16) & 0xff;
-      B[i*4+3] = (j>>>24) & 0xff;
+    function smixStep2(start, end) {
+      for (var i = start; i < end; i += 2) {
+        var j = integerify(XY, xi, r) & (N-1);
+        blockXOR(XY, xi, V, j*(32*r), 32*r);
+        blockMix(tmp, XY, xi, yi, r);
+
+        j = integerify(XY, yi, r) & (N-1);
+        blockXOR(XY, yi, V, j*(32*r), 32*r);
+        blockMix(tmp, XY, yi, xi, r);
+      }
     }
-  }
 
-  function interruptedFor(start, end, step, fn, donefn, pass) {
-    (function performStep() {
-      setTimeout(function() {
-        fn(start, start + step < end ? start + step : end);
-        start += step;
-        if (start < end) {
-          progress((start/end)/2 + (pass ? 0.0 : 0.5));
-          performStep();
-        } else {
-          progress(pass ? 0.5 : 1.0);
-          donefn();
-        }
+    function smixFinish() {
+      for (var i = 0; i < 32*r; i++) {
+        var j = XY[xi+i];
+        B[i*4+0] = (j>>>0)  & 0xff;
+        B[i*4+1] = (j>>>8)  & 0xff;
+        B[i*4+2] = (j>>>16) & 0xff;
+        B[i*4+3] = (j>>>24) & 0xff;
+      }
+    }
+
+    function interruptedFor(start, end, step, fn, donefn, pass) {
+      (function performStep() {
+        setTimeout(function() {
+          fn(start, start + step < end ? start + step : end);
+          start += step;
+          if (start < end) {
+            progress((start/end)/2 + (pass ? 0.0 : 0.5));
+            performStep();
+          } else {
+            progress(pass ? 0.5 : 1.0);
+            donefn();
+          }
+        }, 0);
+      })();
+    }
+
+    // Note: step argument for interruptedFor must be divisible by
+    // two, since smixStepX work in increments of 2.
+    if (!interruptStep) interruptStep = 1000;
+
+    smixStart();
+    interruptedFor(0, N, interruptStep*2, smixStep1, function() {
+      interruptedFor(0, N, interruptStep*2, smixStep2, function () {
+        smixFinish();
+        var result = PBKDF2_HMAC_SHA256_OneIter(password, B, dkLen);
+        if (encoding == "base64")
+          callback(bytesToBase64(result));
+        else if (encoding == "hex")
+          callback(bytesToHex(result));
+        else
+          callback(result);
       }, 0);
-    })();
+    }, 1);
   }
-
-  // Note: step argument for interruptedFor must be divisible by
-  // two, since smixStepX work in increments of 2.
-  if (!interruptStep) interruptStep = 1000;
-  
-  smixStart();
-  interruptedFor(0, N, interruptStep*2, smixStep1, function() {
-    interruptedFor(0, N, interruptStep*2, smixStep2, function () {
-      smixFinish();
-      var result = PBKDF2_HMAC_SHA256_OneIter(password, B, dkLen);
-      if (encoding == "base64")
-        callback(bytesToBase64(result));
-      else if (encoding == "hex")
-        callback(bytesToHex(result));
-      else
-        callback(result);
-    }, 0);
-  }, 1);
-}
+  __scrypt.bytesToHex = bytesToHex;
+  __scrypt.bytesToBase64 = bytesToBase64;
+  return __scrypt;
+})();
 
 if (typeof module !== 'undefined') module.exports = scrypt;
