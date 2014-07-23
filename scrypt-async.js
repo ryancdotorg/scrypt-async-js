@@ -9,7 +9,7 @@
  */
 
 /**
- * scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encoding)
+ * scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding)
  *
  * Derives a key from password and salt and calls callback
  * with derived key as the only argument.
@@ -21,10 +21,14 @@
  * @param {number} dkLen Length of derived key.
  * @param {number} interruptStep Steps to split calculation with timeouts (default 1000).
  * @param {function(string)} callback Callback function.
+ * @param {function(number)} progress Progress function
  * @param {string?} encoding Result encoding ("base64", "hex", or null).
  */
-function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encoding) {
+function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
   'use strict';
+
+  progress = typeof progress === 'function' ? progress : function(x){};
+  progress(0.0);
 
   function SHA256(m) {
     /** @const */ var K = [
@@ -414,16 +418,19 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
     }
   }
 
-  function interruptedFor(start, end, step, fn, donefn) {
+  function interruptedFor(start, end, step, fn, donefn, pass) {
     (function performStep() {
       setTimeout(function() {
         fn(start, start + step < end ? start + step : end);
         start += step;
-        if (start < end)
+        if (start < end) {
+          progress((start/end)/2 + (pass ? 0.0 : 0.5));
           performStep();
-        else
+        } else {
+          progress(pass ? 0.5 : 1.0);
           donefn();
-        }, 0);
+        }
+      }, 0);
     })();
   }
 
@@ -442,8 +449,8 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
         callback(bytesToHex(result));
       else
         callback(result);
-    });
-  });
+    }, 0);
+  }, 1);
 }
 
 if (typeof module !== 'undefined') module.exports = scrypt;
