@@ -3,30 +3,96 @@
 <body>
 <script src="scrypt-async.js"></script>
 <script>
+function consoleLog(m) { console.log(m); }
+
 function progress(x) {
   var percent = Math.floor(x*100);
-  console.log(percent);
   document.querySelector('#progress').innerHTML = percent.toString() + '%';
 }
+
+/*
+function _iter_scrypt(iter, password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
+  function _iter
+  scrypt(password, salt, logN, r, dkLen, interruptStep, function(res) {
+    iter_scrypt(iter, password, res, logN, r, dkLen, interruptStep, callback, progress, encoding);
+  }, progress, 'raw');
+}
+*/
+
+function iter_scrypt(iter, password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
+  var cur_iter = 0, last_result = salt;
+
+  // wrapper to scale progress by iteration number
+  function progress_wrap(p) {
+    progress(((cur_iter-1)/iter) + (p / iter));
+  }
+
+  function update_last_result(res) {
+    last_result = res;
+    //consoleLog(scrypt.bytesToHex(res));
+    _iter();
+  }
+
+  function _iter() {
+    if (cur_iter >= iter) {
+      if (encoding == "base64")
+        callback(scrypt.bytesToBase64(last_result));
+      else if (encoding == "hex")
+        callback(scrypt.bytesToHex(last_result));
+      else
+        callback(last_result);
+
+      cur_iter = -1;
+    } else {
+      ++cur_iter;
+      document.querySelector('#pass').innerHTML = cur_iter;
+      scrypt(password, last_result, logN, r, dkLen, interruptStep, update_last_result, progress_wrap);
+    }
+    last_result = void 0;
+  }
+
+  var _iter_if_ready = function() {
+    if (typeof last_result !== 'undefined') {
+      _iter();
+    } else if (cur_iter < 0) {
+      return void 0;
+    }
+    setTimeout(_iter_if_ready, 100);
+  }
+
+  _iter_if_ready();
+}
+
 function testMe() {
   var t1=(new Date()).getTime();
-  //console.log('hashing...');
+  //consoleLog('hashing...');
   var step = document.querySelector('#forstep').value;
   var logN = document.querySelector('#logn').value;
   var r = document.querySelector('#r').value;
+  var i = document.querySelector('#i').value;
   document.querySelector("#btn").disabled = true;
   document.querySelector("#btn").innerHTML = 'Wait...';
-  scrypt([1,2,3], [4,5,6], logN, r, 32, step, function(res) {
+
+  function callback(res) {
     var t2 = ((new Date()).getTime()-t1);
     document.querySelector('#out').innerHTML = 'scrypt: <b>'+t2+' ms</b> ' + res;
     document.querySelector("#btn").disabled = false;
     document.querySelector("#btn").innerHTML = 'Calculate';
-  }, progress, "base64");
+  }
+
+  iter_scrypt(i, "herpderp", "", logN, r, 32, step, callback, progress, 'hex');
+  //scrypt([1,2,3], [4,5,6], logN, r, 32, step, callback, progress, "hex");
 }
 </script>
-interruptStep: <input id="forstep" type="text" value="200"><br>
-logN: <input id="logn" type="text" value="11"><br>
+interruptStep: <input id="forstep" type="text" value="6554"><br>
+logN: <input id="logn" type="text" value="17"><br>
 r: <input id="r" type="text" value="8"><br>
+i: <input id="i" type="text" value="64"><br>
 <button id="btn" onclick="testMe()">Calculate</button>
-<div id="progress">&nbsp;</div>
+<div>
+Pass: <span id="pass">&nbsp;</span>
+Progress: <span id="progress">&nbsp;</span>
+</div>
 <div id="out">&nbsp;</div>
+</body>
+</html>
