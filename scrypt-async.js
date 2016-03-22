@@ -26,10 +26,11 @@
  * @param {number}  dkLen Length of derived key.
  * @param {number?} interruptStep (optional) Steps to split calculation with timeouts (default 1000).
  * @param {function(string|Array.<number>)} callback Callback function.
+ * @param {function(number)?} progress Progress function
  * @param {string?} encoding (optional) Result encoding ("base64", "hex", or null).
  *
  */
-function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encoding) {
+function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progress, encoding) {
   'use strict';
 
   function SHA256(m) {
@@ -44,7 +45,7 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
       0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
       0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819,
       0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08,
-      0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f,
+      {0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f,
       0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
       0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
     ];
@@ -422,15 +423,18 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
 
   var nextTick = (typeof setImmediate !== 'undefined') ? setImmediate : setTimeout;
 
-  function interruptedFor(start, end, step, fn, donefn) {
+  function interruptedFor(start, end, step, fn, donefn, pass) {
     (function performStep() {
       nextTick(function() {
         fn(start, start + step < end ? start + step : end);
         start += step;
-        if (start < end)
+        if (start < end) {
+          progress((start/end)/2 + (pass ? 0.0 : 0.5));
           performStep();
-        else
+        } else {
+          progress(pass ? 0.5 : 1.0);
           donefn();
+        }
         });
     })();
   }
@@ -446,11 +450,19 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
   }
 
   if (typeof interruptStep === 'function') {
-    // Called as: scrypt(...,      callback, [encoding])
-    //  shifting: scrypt(..., interruptStep,  callback, [encoding])
-    encoding = callback;
+    // Called as: scrypt(...,      callback, [progress], [encoding])
+    //  shifting: scrypt(..., interruptStep,  callback,  [progress], [encoding])
+    encoding = progress;
+    progress = callback;
     callback = interruptStep;
     interruptStep = 1000;
+  }
+
+  if (typeof progress !== 'function') {
+    // Called as: scrypt(..., [encoding])
+    //  shifting: scrypt(..., progress, [encoding]
+    encoding = progress;
+    progress = function(){};
   }
 
   if (interruptStep <= 0) {
@@ -468,12 +480,13 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, encodin
     // Async variant with interruptions, calls callback.
     //
     smixStart();
+    progress(0.0);
     interruptedFor(0, N, interruptStep*2, smixStep1, function() {
       interruptedFor(0, N, interruptStep*2, smixStep2, function () {
         smixFinish();
         callback(getResult(encoding));
-      });
-    });
+      }, 0);
+    }, 1);
   }
 }
 
