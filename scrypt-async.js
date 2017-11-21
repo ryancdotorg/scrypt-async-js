@@ -480,13 +480,15 @@ function scrypt(password, salt, logN, r, dkLen, interruptStep, callback, progres
     // Async variant with interruptions, calls callback.
     //
     smixStart();
-    progress(0.0);
-    interruptedFor(0, N, interruptStep*2, smixStep1, function() {
-      interruptedFor(0, N, interruptStep*2, smixStep2, function () {
-        smixFinish();
-        callback(getResult(encoding));
-      }, 0);
-    }, 1);
+    smixStartAsync(function(){
+      progress(0.0);
+      interruptedFor(0, N, interruptStep*2, smixStep1, function() {
+        interruptedFor(0, N, interruptStep*2, smixStep2, function () {
+          smixFinish();
+          callback(getResult(encoding));
+        }, 0);
+      }, 1);
+    });
   }
 }
 
